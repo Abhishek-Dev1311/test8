@@ -20,20 +20,21 @@ jobs:
           sudo yum install -y nginx
           sudo systemctl start nginx
           sudo systemctl enable nginx
-          sudo systemctl status nginx
 
       - name: Start Web Server
         run: |
           echo "Starting Nginx Server..."
           sudo systemctl restart nginx
+          echo "Waiting for Nginx to be fully available..."
+          for i in {1..10}; do
+            curl -I http://localhost && break
+            echo "Waiting for Nginx..."
+            sleep 5
+          done
           echo "Web server is running!"
 
-      - name: Verify Web Server is Running
-        run: |
-          curl -I http://localhost
-
   sonarqube-analysis:
-    runs-on: self-hosted  # Runs on the self-hosted runner
+    runs-on: self-hosted
     needs: start-web-server  # Runs after the web server is started
 
     steps:
@@ -42,17 +43,27 @@ jobs:
 
       - name: Start SonarQube in Docker
         run: |
-          echo "Starting SonarQube..."
-          docker run -d --name sonarqube -p 9000:9000 -p 9092:9092 sonarqube:lts
+          echo "Checking if SonarQube is already running..."
+          if [ "$(docker ps -q -f name=sonarqube)" ]; then
+            echo "SonarQube is already running."
+          else
+            echo "Starting SonarQube..."
+            docker run -d --name sonarqube -p 9000:9000 -p 9092:9092 sonarqube:lts
+          fi
+
           echo "Waiting for SonarQube to be ready..."
-          sleep 30  # Wait for SonarQube to initialize
-          curl -I http://localhost:9000 || (echo "SonarQube failed to start" && exit 1)
+          for i in {1..20}; do
+            curl -s http://localhost:9000/api/system/status | grep '"status":"UP"' && break
+            echo "Waiting for SonarQube to be ready..."
+            sleep 5
+          done
 
       - name: Run SonarQube Analysis
         env:
           SONAR_HOST_URL: "http://localhost:9000"
           SONAR_LOGIN: ${{ secrets.SONAR_TOKEN }}
         run: |
+          echo "Running SonarQube Analysis..."
           sonar-scanner \
             -Dsonar.projectKey=my-project \
             -Dsonar.sources=. \
