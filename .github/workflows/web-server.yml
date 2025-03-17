@@ -1,0 +1,33 @@
+name: Run Web Server on Self-Hosted Runner
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+jobs:
+  start-web-server:
+    runs-on: self-hosted  # Ensures it runs on your self-hosted runner
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Install Dependencies (Ubuntu-based)
+        run: |
+          sudo apt update
+          sudo apt install -y nginx
+          sudo systemctl start nginx
+          sudo systemctl enable nginx
+          sudo systemctl status nginx
+
+      - name: Start Web Server
+        run: |
+          echo "Starting Nginx Server..."
+          sudo systemctl restart nginx
+          echo "Web server is running!"
+
+      - name: Verify Web Server is Running
+        run: |
+          curl -I http://localhost
