@@ -1,4 +1,4 @@
-name: Run Web Server on Self-Hosted Runner (Amazon Linux)
+name: Run Web Server and SonarQube on Self-Hosted Runner
 
 on:
   push:
@@ -31,3 +31,30 @@ jobs:
       - name: Verify Web Server is Running
         run: |
           curl -I http://localhost
+
+  sonarqube-analysis:
+    runs-on: self-hosted  # Runs on the self-hosted runner
+    needs: start-web-server  # Runs after the web server is started
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Start SonarQube in Docker
+        run: |
+          echo "Starting SonarQube..."
+          docker run -d --name sonarqube -p 9000:9000 -p 9092:9092 sonarqube:lts
+          echo "Waiting for SonarQube to be ready..."
+          sleep 30  # Wait for SonarQube to initialize
+          curl -I http://localhost:9000 || (echo "SonarQube failed to start" && exit 1)
+
+      - name: Run SonarQube Analysis
+        env:
+          SONAR_HOST_URL: "http://localhost:9000"
+          SONAR_LOGIN: ${{ secrets.SONAR_TOKEN }}
+        run: |
+          sonar-scanner \
+            -Dsonar.projectKey=my-project \
+            -Dsonar.sources=. \
+            -Dsonar.host.url=$SONAR_HOST_URL \
+            -Dsonar.login=$SONAR_LOGIN
